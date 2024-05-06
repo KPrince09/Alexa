@@ -1,34 +1,39 @@
 import * as T from "three";
-import {  GLTFLoader, KTX2Loader, RGBELoader } from "three/examples/jsm/Addons.js";
+import {
+  GLTFLoader,
+  KTX2Loader,
+  RGBELoader,
+} from "three/examples/jsm/Addons.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
 // new canvas element
 const canvas = document.createElement("canvas");
-const playBtn = document.getElementById("play")
+const playBtn = document.getElementById("play");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 // Add the canvas to the body of the document
 document.body.appendChild(canvas);
 
-
-
-
 // WebGLRenderer
 const renderer = new T.WebGLRenderer({
   canvas: canvas,
-  antialias:true
+  antialias: true,
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio( window.devicePixelRatio );
+renderer.setPixelRatio(window.devicePixelRatio);
 renderer.toneMapping = T.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
 const scene = new T.Scene();
 
-
 //  camera
-const camera = new T.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.1, 2000 );
+const camera = new T.PerspectiveCamera(
+  45,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  2000
+);
 
 camera.position.z = 2.3;
 camera.position.y = 1.31;
@@ -36,8 +41,6 @@ camera.position.y = 1.31;
 const light = new T.AmbientLight("#ffffff", 1);
 scene.add(light);
 new OrbitControls(camera, renderer.domElement);
-
-
 
 const vertexShader = `
         varying vec2 vUv;
@@ -49,7 +52,7 @@ const vertexShader = `
 
         `;
 
-        const fragmentShader = `
+const fragmentShader = `
         uniform float time;
         
         varying vec2 vUv;
@@ -61,8 +64,8 @@ const vertexShader = `
             // Define the speed of the animation
             float animationSpeed = 1.4; // Adjust this value as needed
         
-            // Define the duration of the animation in seconds
-            float animationDuration = 3.0; // Adjust this value as needed
+            // duration of the animation in seconds
+            float animationDuration = 3.0; 
         
             // Calculate the normalized time within the animation duration
             float normalizedTime = mod(time * animationSpeed, animationDuration) / animationDuration;
@@ -79,75 +82,67 @@ const vertexShader = `
             float fadeFactor = smoothstep(cyanRadius, outerRadius, distanceFromCenter - normalizedTime);
         
             // Mix the colors based on the fade factor
-            vec3 baseColor = mix(vec3(0.0, 1.0, 1.0), vec3(0.231, 0.4, 0.961), fadeFactor);
+            vec3 baseColor = mix(vec3(1.0, 0.0, 0.0), vec3(0.231, 0.4, 0.961), fadeFactor);
         
             // Output the final color
             gl_FragColor = vec4(baseColor, 1.0);
         }
         `;
-        
-let time = { value: 0 }; // initialize the time uniform
 
-const ktx2Loader = new KTX2Loader().setTranscoderPath('three/examples/jsm/libs/basis/')
+let time = { value: 0 };
 
+const ktx2Loader = new KTX2Loader().setTranscoderPath(
+  "three/examples/jsm/libs/basis/"
+);
 
-new RGBELoader()
-					.load( 'env.hdr', function ( texture ) {
+new RGBELoader().load("env.hdr", function (texture) {
+  texture.mapping = T.EquirectangularReflectionMapping;
 
-						texture.mapping = T.EquirectangularReflectionMapping;
+  scene.background = texture;
+  scene.environment = texture;
 
-						scene.background = texture;
-						scene.environment = texture;
+  render();
 
-						render();
+  const loader = new GLTFLoader();
+  loader.setKTX2Loader(ktx2Loader);
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load("alexa.glb", async function (gltf) {
+    const model = gltf.scene;
+    let lightMaterial: T.MeshStandardMaterial | null = null;
+    model.traverse((node) => {
+      if (node instanceof T.Mesh && node.material.name === "light") {
+        lightMaterial = node.material;
 
-					
-						const loader = new GLTFLoader();
-            loader.setKTX2Loader( ktx2Loader );
-				    loader.setMeshoptDecoder( MeshoptDecoder );
-						loader.load( 'alexa.glb', async function ( gltf ) {
+        if (lightMaterial != null) {
+          lightMaterial.onBeforeCompile = (shader) => {
+            shader.fragmentShader = fragmentShader;
+            shader.vertexShader = vertexShader;
+            shader.uniforms.time = time;
+          };
+        }
+      }
+    });
 
-							const model = gltf.scene;
-              let lightMaterial: T.MeshStandardMaterial | null = null;
-              model.traverse((node) => {
-                if (node instanceof T.Mesh && node.material.name === "light") {
-                  lightMaterial = node.material;
-            
-                  if (lightMaterial != null) {
-                    lightMaterial.onBeforeCompile = (shader) => {
-                      shader.fragmentShader = fragmentShader
-                      shader.vertexShader = vertexShader
-                      // Define uniforms for the material
-                      shader.uniforms.time = time;
-               
-                    };
-                  }
-                }
-              });
+    await renderer.compileAsync(model, camera, scene);
 
-							await renderer.compileAsync( model, camera, scene );
+    scene.add(model);
 
-							scene.add( model );
+    render();
+  });
+});
 
-							render();
-			
-						} );
-
-					} );
-
-const material = new T.MeshStandardMaterial()
-const geometry = new T.PlaneGeometry(3,3)
-const mesh = new T.Mesh(geometry,material)
-mesh.rotation.x = - Math.PI/2
+const material = new T.MeshStandardMaterial();
+const geometry = new T.PlaneGeometry(3, 3);
+const mesh = new T.Mesh(geometry, material);
+mesh.rotation.x = -Math.PI / 2;
 
 // scene.add(mesh)
 
 material.onBeforeCompile = (shader) => {
-  shader.fragmentShader = fragmentShader
-  shader.vertexShader = vertexShader
+  shader.fragmentShader = fragmentShader;
+  shader.vertexShader = vertexShader;
   shader.uniforms.time = time;
-
-}
+};
 
 const clock = new T.Clock();
 
@@ -155,15 +150,13 @@ let animationTriggered = false;
 let animationCompleted = false;
 
 playBtn?.addEventListener("click", () => {
-  if (!animationTriggered || animationCompleted) { 
+  if (!animationTriggered || animationCompleted) {
     animationTriggered = true;
-    animationCompleted = false; 
-    time.value = 0; 
-    clock.start(); 
+    animationCompleted = false;
+    time.value = 0;
+    clock.start();
   }
 });
-
-
 
 function render() {
   requestAnimationFrame(render);
@@ -179,5 +172,3 @@ function render() {
 
   renderer.render(scene, camera);
 }
-
-
